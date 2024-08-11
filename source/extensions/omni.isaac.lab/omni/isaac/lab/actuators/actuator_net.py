@@ -22,10 +22,12 @@ from omni.isaac.core.utils.types import ArticulationActions
 
 from omni.isaac.lab.utils.assets import read_file
 
+from omni.isaac.lab.utils import DelayBuffer
+
 from .actuator_pd import DCMotor
 
 if TYPE_CHECKING:
-    from .actuator_cfg import ActuatorNetLSTMCfg, ActuatorNetMLPCfg
+    from .actuator_cfg import ActuatorNetLSTMCfg, ActuatorNetMLPCfg, DeplayedActuatorNetMLPCfg
 
 
 class ActuatorNetLSTM(DCMotor):
@@ -187,3 +189,77 @@ class ActuatorNetMLP(DCMotor):
         control_action.joint_positions = None
         control_action.joint_velocities = None
         return control_action
+
+
+
+class DelayedActuatorNetMLP(ActuatorNetMLP):
+    """Actuator model based on multi-layer perceptron and joint history with delay.
+
+    Many times the analytical model is not sufficient to capture the actuator dynamics, the
+    delay in the actuator response, or the non-linearities in the actuator. In these cases,
+    a neural network model can be used to approximate the actuator dynamics. This model is
+    trained using data collected from the physical actuator and maps the joint state and the
+    desired joint command to the produced torque by the actuator.
+
+    This class implements the learned model as a neural network based on the work from
+    :cite:t:`hwangbo2019learning`. The class stores the history of the joint positions errors
+    and velocities which are used to provide input to the neural network. The model is loaded
+    as a TorchScript.
+
+    Note:
+        Only the desired joint positions are used as inputs to the network.
+
+    """
+
+    cfg: DeplayedActuatorNetMLPCfg
+    """The configuration of the actuator model."""
+
+    def __init__(self, cfg: DeplayedActuatorNetMLPCfg, *args, **kwargs):
+        super().__init__(cfg, *args, **kwargs)
+
+        # instantiate the delay buffers
+        self.positions_delay_buffer = DelayBuffer(cfg.max_delay, self._num_envs, device=self._device)
+        self.velocities_delay_buffer = DelayBuffer(cfg.max_delay, self._num_envs, device=self._device)
+        self.efforts_delay_buffer = DelayBuffer(cfg.max_delay, self._num_envs, device=self._device)
+        # all of the envs
+        self._ALL_INDICES = torch.arange(self._num_envs, dtype=torch.long, device=self._device)
+        
+
+    """
+    Operations.
+    """
+
+    def reset(self, env_ids: Sequence[int]):
+        # reset the history for the specified environments
+        super().reset(env_ids)
+        # number of environments (since env_ids can be a slice)
+        if env_ids is None or env_ids == slice(None):
+            num_envs = self._num_envs
+        else:
+            num_envs = len(env_ids)
+        # set a new random delay for environments in env_ids
+        time_lags = torch.randint(
+            low=self.cfg.min_delay,
+            high=self.cfg.max_delay + 1,
+            size=(num_envs,),
+            dtype=torch.int,
+            device=self._device,
+        )
+        # set delays
+        self.positions_delay_buffer.set_time_lag(time_lags, env_ids)
+        self.velocities_delay_buffer.set_time_lag(time_lags, env_ids)
+        self.efforts_delay_buffer.set_time_lag(time_lags, env_ids)
+        # reset buffers
+        self.positions_delay_buffer.reset(env_ids)
+        self.velocities_delay_buffer.reset(env_ids)
+        self.efforts_delay_buffer.reset(env_ids)
+
+    def compute(
+        self, control_action: ArticulationActions, joint_pos: torch.Tensor, joint_vel: torch.Tensor
+    ) -> ArticulationActions:
+        # apply delay based on the delay the model for all the setpoints
+        control_action.joint_positions = self.positions_delay_buffer.compute(control_action.joint_positions)
+        control_action.joint_velocities = self.velocities_delay_buffer.compute(control_action.joint_velocities)
+        control_action.joint_efforts = self.efforts_delay_buffer.compute(control_action.joint_efforts)
+
+        return super().compute(control_action, joint_pos, joint_vel)

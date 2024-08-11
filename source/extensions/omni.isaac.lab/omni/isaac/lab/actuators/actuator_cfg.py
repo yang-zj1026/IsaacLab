@@ -187,3 +187,16 @@ class RemotizedPDActuatorCfg(DelayedPDActuatorCfg):
     This tensor describes the relationship between the joint angle (rad), the transmission ratio (in/out),
     and the output torque (N*m). The table is used to interpolate the output torque based on the joint angle.
     """
+
+
+@configclass
+class DeplayedActuatorNetMLPCfg(ActuatorNetMLPCfg):
+    """Configuration for delayed actuator model using an MLP network."""
+
+    class_type: type = actuator_net.DelayedActuatorNetMLP
+
+    min_delay: int = 0
+    """Minimum number of physics time-steps with which the actuator command may be delayed. Defaults to 0."""
+
+    max_delay: int = 0
+    """Maximum number of physics time-steps with which the actuator command may be delayed. Defaults to 0."""
