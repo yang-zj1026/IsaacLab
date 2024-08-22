@@ -67,6 +67,19 @@ class GridPatternCfg(PatternBaseCfg):
     * *"yx"* ordering: :math:`[(0, 3), (1, 3), (2, 3), (1, 4), (2, 4), (2, 4)]`
     """
 
+@configclass
+class LidarGridPatternCfg(GridPatternCfg):
+    """Configuration for the lidar grid pattern for ray-casting.
+
+    Defines a 2D grid of rays in the coordinates of the sensor.
+
+    .. attention::
+        The points are ordered based on the :attr:`ordering` attribute.
+
+    """
+
+    func: Callable = patterns.lidar_grid_pattern
+
 
 @configclass
 class PinholeCameraPatternCfg(PatternBaseCfg):
