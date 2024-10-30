@@ -15,7 +15,8 @@ from omni.isaac.lab.utils.io import dump_yaml
 from omni.isaac.lab.utils.timer import Timer
 from omni.isaac.lab.utils.warp import convert_to_warp_mesh
 
-from .height_field import HfTerrainBaseCfg
+from .height_field import HfTerrainBaseCfg, HfDiscreteObstaclesTerrainCfg
+from .trimesh import MeshRepeatedObjectsTerrainCfg
 from .terrain_generator_cfg import FlatPatchSamplingCfg, SubTerrainBaseCfg, TerrainGeneratorCfg
 from .trimesh.utils import make_border
 from .utils import color_meshes_by_height, find_flat_patches
@@ -134,6 +135,7 @@ class TerrainGenerator:
         # create a list of all sub-terrains
         self.terrain_meshes = list()
         self.terrain_origins = np.zeros((self.cfg.num_rows, self.cfg.num_cols, 3))
+
 
         # parse configuration and add sub-terrains
         # create terrains based on curriculum or randomly
@@ -361,6 +363,10 @@ class TerrainGenerator:
 
         # generate the terrain
         meshes, origin = cfg.function(difficulty, cfg)
+
+        if isinstance(cfg, HfDiscreteObstaclesTerrainCfg) or isinstance(cfg, MeshRepeatedObjectsTerrainCfg):
+            origin[2] = 0.0
+        
         mesh = trimesh.util.concatenate(meshes)
         # offset mesh such that they are in their center
         transform = np.eye(4)
