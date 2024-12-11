@@ -72,6 +72,12 @@ class RslRlPpoAlgorithmCfg:
     max_grad_norm: float = MISSING
     """The maximum gradient norm."""
 
+    use_roa: bool = MISSING
+    """Whether to use ROA."""
+
+    dagger_update_freq: int = MISSING
+    """The frequency of the dagger update."""
+
 
 @configclass
 class RslRlOnPolicyRunnerCfg:
